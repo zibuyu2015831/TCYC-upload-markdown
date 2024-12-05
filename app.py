@@ -68,7 +68,8 @@ import qiniu
 from webdav4.client import Client
 from flask import Flask, request
 
-IS_YUN_CLOUD = True  # 是否使用腾讯云函数部署；决定文件写入路径
+# IS_YUN_CLOUD = True  # 是否使用腾讯云函数部署；决定文件写入路径
+IS_YUN_CLOUD = False  # 是否使用腾讯云函数部署；决定文件写入路径
 
 
 @dataclass
@@ -271,6 +272,7 @@ class Handler(object):
     def is_note_valid(self) -> bool:
 
         self.note_url = self.data.get('note_url')  # 笔记链接
+        self.storage_type = self.data.get('storage_type') or self.storage_type
 
         # 笔记保存路径；默认在根目录下创建
         self.save_note_path = self.data.get('save_note_path') or self.save_note_path
@@ -337,10 +339,9 @@ class Handler(object):
         # 七牛云配置，通过环境变量获取
         qiniu_access_key = os.getenv('qiniu_access_key')
         qiniu_secret_key = os.getenv('qiniu_secret_key')
-        bucket_domain = os.getenv('bucket_domain')
         bucket_name = os.getenv('bucket_name')
 
-        if all([qiniu_access_key, qiniu_secret_key, bucket_domain, bucket_name]):
+        if all([qiniu_access_key, qiniu_secret_key, bucket_name]):
             return Qiniu(
                 access_key=qiniu_access_key,
                 secret_key=qiniu_secret_key,
@@ -385,10 +386,9 @@ class Handler(object):
 
         new_qiniu_access_key = self.data.get('qiniu_access_key')
         new_qiniu_secret_key = self.data.get('qiniu_secret_key')
-        new_bucket_domain = self.data.get('bucket_domain')
         new_bucket_name = self.data.get('bucket_name')
 
-        if all([new_qiniu_access_key, new_qiniu_secret_key, new_bucket_domain, new_bucket_name]):
+        if all([new_qiniu_access_key, new_qiniu_secret_key, new_bucket_name]):
             return Qiniu(
                 access_key=new_qiniu_access_key,
                 secret_key=new_qiniu_secret_key,
@@ -501,6 +501,7 @@ source: {self.note_source}
         :param remote_file_path:
         :return:
         """
+
         try:
             self.s3_handler.upload_file(local_voice_path, remote_file_path)
             return True
@@ -550,15 +551,15 @@ source: {self.note_source}
             return False
 
         result = False
-        if self.storage_type == 'qiniu':
+        storage_type = self.storage_type.lower()
+        if storage_type == 'qiniu':
             result = self.upload_file_to_qiniu(local_file_path, remote_file_path)
-        elif self.storage_type == 's3':
+        elif storage_type == 's3':
             result = self.upload_file_to_s3(local_file_path, remote_file_path)
-        elif self.storage_type == 'webdav':
+        elif storage_type == 'webdav':
             result = self.upload_file_to_webdav(local_file_path, remote_file_path)
 
         if not result:
-            self.message = f'上传笔记到【{self.storage_type}】失败'
             return False
 
         self.message = f'上传笔记到【{self.storage_type}】成功'
