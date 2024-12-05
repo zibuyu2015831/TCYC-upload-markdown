@@ -6,17 +6,16 @@ project: wechat_official_SCF
 author: 子不语
 date: 2024/11/28
 contact: 【公众号】思维兵工厂
-description: 部署腾讯云函数，操作同步在七牛云对象存储中的笔记
+description: 部署腾讯云函数，上传markdown笔记到对象存储中
 
 部署时需要为该函数设置以下环境变量，同时将部署之后得到的url写入主程序配置文件中：
-    - storage_type[可选]：值为“qiniu”或“s3”或“webdav”，默认s3
+    - storage_type[可选]：值为“qiniu”或“s3”或“webdav”，默认qiniu
     - token：鉴权token[可选]，如果传入，则只有token输入正确的请求才会处理；
 
     - qiniu_access_key[可选]：七牛云的access_key
     - qiniu_secret_key[可选]：七牛云的secret_key
-    - bucket_domain[可选]：对象存储bucket的域名
 
-    - bucket_name：对象存储bucket的名称
+    - bucket_name：对象存储bucket的名称；七牛云和s3都需要传入
 
     - s3_endpoint[可选]：s3对象存储的域名；
     - s3_region[可选]：s3对象存储的区域；
@@ -30,18 +29,19 @@ description: 部署腾讯云函数，操作同步在七牛云对象存储中的�
 该接口只接收POST请求，需要在请求体中传入如下参数：
 
     - token：用于鉴权；
-    - note_name：字符串类型；默认为随机字符串；
+    - note_title：字符串类型；默认为随机字符串；
     - note_content：字符串类型；笔记内容；
+    - note_url[可选]：网址链接，若传入该值，则会忽略 note_title和note_content，改为获取网页内容；
 
-    - note_url[可选]：网址链接，若传入该值，在忽略 note_name和note_content，改为获取网页内容；
     - save_note_path[可选]：笔记保存路径；默认在根目录下创建【000_cloud_note】文件夹
     - note_source[可选]：笔记来源，用于标记笔记属性；默认为：公众号【思维兵工厂】
 
-    - qiniu_access_key：[ 可选，不设置则必须在环境变量中设置 ] 七牛云的access_key
-    - qiniu_secret_key：[ 可选，不设置则必须在环境变量中设置 ] 七牛云的secret_key
-    - bucket_domain：[ 可选，不设置则必须在环境变量中设置 ] 对象存储bucket的域名
+    - storage_type[可选]：值为“qiniu”或“s3”或“webdav”，默认qiniu
 
-    - bucket_name：[ 可选，不设置则必须在环境变量中设置 ] 对象存储bucket的名称
+    - qiniu_access_key[可选]：七牛云的access_key
+    - qiniu_secret_key[可选]：七牛云的secret_key
+
+    - bucket_name[可选]：对象存储bucket的名称；七牛云和s3都需要传入
 
     - s3_endpoint[可选]：s3对象存储的域名；
     - s3_region[可选]：s3对象存储的区域；
@@ -186,13 +186,11 @@ class Qiniu(object):
             access_key: str,
             secret_key: str,
             bucket_name: str,
-            bucket_domain: str,
     ):
 
         self.access_key = access_key
         self.secret_key = secret_key
         self.bucket_name = bucket_name
-        self.bucket_domain = bucket_domain
 
         self.__auth = qiniu.Auth(self.access_key, self.secret_key)
 
@@ -228,13 +226,13 @@ class Handler(object):
     def __init__(self):
 
         # 存储类型
-        self.storage_type = os.getenv('storage_type') or 's3'
+        self.storage_type = os.getenv('storage_type') or 'qiniu'
         self.yun_token = os.getenv('token')  # 云函数设置时设定的token，用于鉴权；
 
         # 请求数据
         self.data: Dict = json.loads(request.data.decode('utf-8'))
 
-        self.note_url: str = ''  # 笔记URL，若该值不为空，则忽略 note_name 和 note_content
+        self.note_url: str = ''  # 笔记URL，若该值不为空，则忽略 note_title 和 note_content
         self.note_title: str = ''  # 笔记标题；
         self.note_content: str = ''  # 笔记内容；
         self.save_note_path: str = '000_cloud_note'  # 笔记保存路径；默认在根目录下创建
@@ -280,7 +278,7 @@ class Handler(object):
         if self.note_url:
             return self.get_note_from_url()
 
-        self.note_title = self.data.get('note_name')  # 笔记标题
+        self.note_title = self.data.get('note_title')  # 笔记标题
 
         if not self.note_title.endswith('.md'):
             self.note_title = f"{self.note_title}.md" if self.note_title else f"{self.random_code}.md"
@@ -347,7 +345,6 @@ class Handler(object):
                 access_key=qiniu_access_key,
                 secret_key=qiniu_secret_key,
                 bucket_name=bucket_name,
-                bucket_domain=bucket_domain
             )
 
     @staticmethod
@@ -396,7 +393,6 @@ class Handler(object):
                 access_key=new_qiniu_access_key,
                 secret_key=new_qiniu_secret_key,
                 bucket_name=new_bucket_name,
-                bucket_domain=new_bucket_domain
             )
 
     def get_new_s3(self) -> Optional[S3]:
@@ -498,7 +494,13 @@ source: {self.note_source}
         except:
             return ''
 
-    def upload_file_to_s3(self, local_voice_path: str, remote_file_path: str):
+    def upload_file_to_s3(self, local_voice_path: str, remote_file_path: str) -> bool:
+        """
+        上传文件到S3
+        :param local_voice_path:
+        :param remote_file_path:
+        :return:
+        """
         try:
             self.s3_handler.upload_file(local_voice_path, remote_file_path)
             return True
@@ -506,7 +508,7 @@ source: {self.note_source}
             self.message = f'上传笔记到七牛云发送未知错误，【{e}】'
             return False
 
-    def upload_file_to_qiniu(self, local_voice_path: str, remote_file_path: str):
+    def upload_file_to_qiniu(self, local_voice_path: str, remote_file_path: str) -> bool:
         """
         上传文件到七牛云
         :param local_voice_path: 音频文件路径
@@ -525,6 +527,13 @@ source: {self.note_source}
             return False
 
     def upload_file_to_webdav(self, local_voice_path: str, remote_file_path: str) -> bool:
+        """
+        上传文件到webdav
+        :param local_voice_path:
+        :param remote_file_path:
+        :return:
+        """
+
         try:
             if not self.webdav_handler.client.exists(self.save_note_path):
                 self.webdav_handler.client.mkdir(self.save_note_path)
@@ -536,6 +545,7 @@ source: {self.note_source}
             return False
 
     def upload_file(self, local_file_path: str, remote_file_path: str) -> bool:
+
         if not self.storage_type:
             return False
 
