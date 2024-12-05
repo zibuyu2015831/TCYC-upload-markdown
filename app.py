@@ -68,8 +68,13 @@ import qiniu
 from webdav4.client import Client
 from flask import Flask, request
 
-# IS_YUN_CLOUD = True  # 是否使用腾讯云函数部署；决定文件写入路径
-IS_YUN_CLOUD = False  # 是否使用腾讯云函数部署；决定文件写入路径
+IS_YUN_CLOUD = True  # 部署用
+# IS_YUN_CLOUD = False  # 测试用
+
+# 部署云函数时，根据环境变量判断是否为云函数部署（一般都会有TZ的环境变量）
+TZ = os.getenv('TZ')
+if TZ:
+    IS_YUN_CLOUD = True
 
 
 @dataclass
