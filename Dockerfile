@@ -36,7 +36,7 @@ RUN apt-get update && \
 COPY . /app
 
 # 安装Python依赖
-RUN pip3.9 install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+RUN pip3.9 install --no-cache-dir -i https://mirrors.tencent.com/pypi/simple/ -r requirements.txt
 
 # 暴露端口
 EXPOSE 9000
