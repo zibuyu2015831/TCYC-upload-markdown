@@ -8,14 +8,17 @@ date: 2024/11/28
 contact: 【公众号】思维兵工厂
 description: 部署腾讯云函数，上传markdown笔记到对象存储中
 
-部署时需要为该函数设置以下环境变量，同时将部署之后得到的url写入主程序配置文件中：
-    - storage_type[可选]：值为“qiniu”或“s3”或“webdav”，默认qiniu
+部署时需要为该函数设置以下环境变量，可选参数可通过环境变量或请求参数传入：
     - token：鉴权token[可选]，如果传入，则只有token输入正确的请求才会处理；
 
-    - qiniu_access_key[可选]：七牛云的access_key
-    - qiniu_secret_key[可选]：七牛云的secret_key
+    - storage_type[可选]：值为“qiniu”或“s3”或“webdav”，默认qiniu；
+    - save_note_path[可选]：笔记保存路径；默认在根目录下创建 000_cloud_note 文件夹；
+    - note_source[可选]：标记笔记来源；默认为 公众号【思维兵工厂】
 
-    - bucket_name：对象存储bucket的名称；七牛云和s3都需要传入
+    - qiniu_access_key[可选]：七牛云的access_key；
+    - qiniu_secret_key[可选]：七牛云的secret_key；
+
+    - bucket_name[可选]：对象存储bucket的名称；七牛云和s3都需要传入，webdav不用传入；
 
     - s3_endpoint[可选]：s3对象存储的域名；
     - s3_region[可选]：s3对象存储的区域；
@@ -31,10 +34,10 @@ description: 部署腾讯云函数，上传markdown笔记到对象存储中
     - token：用于鉴权；
     - note_title：字符串类型；默认为随机字符串；
     - note_content：字符串类型；笔记内容；
-    - note_url[可选]：网址链接，若传入该值，则会忽略 note_title和note_content，改为获取网页内容；
+    - note_url[可选]：网址链接，若传入该值，则会忽略 note_title 和 note_content，改为获取网页内容；
 
-    - save_note_path[可选]：笔记保存路径；默认在根目录下创建【000_cloud_note】文件夹
-    - note_source[可选]：笔记来源，用于标记笔记属性；默认为：公众号【思维兵工厂】
+    - save_note_path[可选]：笔记保存路径；默认在根目录下创建 000_cloud_note 文件夹；
+    - note_source[可选]：笔记来源，用于标记笔记属性；默认为：公众号【思维兵工厂】；
 
     - storage_type[可选]：值为“qiniu”或“s3”或“webdav”，默认qiniu
 
@@ -68,8 +71,7 @@ import qiniu
 from webdav4.client import Client
 from flask import Flask, request
 
-IS_YUN_CLOUD = True  # 部署用
-# IS_YUN_CLOUD = False  # 测试用
+IS_YUN_CLOUD = False  # 测试用
 
 # 部署云函数时，根据环境变量判断是否为云函数部署（一般都会有TZ的环境变量）
 TZ = os.getenv('TZ')
@@ -241,8 +243,8 @@ class Handler(object):
         self.note_url: str = ''  # 笔记URL，若该值不为空，则忽略 note_title 和 note_content
         self.note_title: str = ''  # 笔记标题；
         self.note_content: str = ''  # 笔记内容；
-        self.save_note_path: str = '000_cloud_note'  # 笔记保存路径；默认在根目录下创建
-        self.note_source: str = '公众号【思维兵工厂】'  # 笔记来源，用于标记笔记属性
+        self.save_note_path: str = os.getenv('save_note_path') or '000_cloud_note'  # 笔记保存路径；默认在根目录下创建
+        self.note_source: str = os.getenv('note_source') or '公众号【思维兵工厂】'  # 笔记来源，用于标记笔记属性
 
         self._qiniu_handler: Optional[Qiniu] = None
         self._s3_handler: Optional[S3] = None
@@ -604,4 +606,8 @@ def run():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=9000)
+
+    if os.getenv('TZ'):
+        app.run(host='0.0.0.0', port=9000)
+    else:
+        app.run(host='127.0.0.1', port=9000)
